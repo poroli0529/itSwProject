@@ -1,0 +1,68 @@
+/* MarketHeader 전체를 Flexbox 컨테이너로 설정 */
+.MarketHeader {
+    display: flex;
+    justify-content: center;
+    /* 자식 요소인 header-content를 가로 중앙에 배치 */
+    align-items: center;
+    /* 자식 요소인 header-content를 세로 중앙에 배치 (MarketHeader 높이가 있을 경우) */
+    width: 100%;
+    padding-left: 20px;
+    padding-right: 20px;
+ 
+}
+/* 버튼들을 감싸는 div에 Flexbox를 적용하여 버튼들을 수평으로 배치 */
+.market-buttons {
+    display: flex;
+    justify-content: center;
+    /* 버튼들을 가로 가운데 정렬 */
+    gap: 10px;
+    /* 버튼들 사이의 간격 */
+    margin-top: 10px;
+    /* h1과 버튼 그룹 사이의 간격 */
+}
+.MarketHeader button:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.12);
+ }
+
+.product-table {
+    width: 100%;
+    border-collapse: separate;
+    /* 기본 collapse 대신 separate */
+    border-spacing: 20px 50px;
+    /* 가로 20px, 세로 50px 간격 */
+    margin-top: 20px;
+}
+
+.product-cell {
+    border: 1px solid #e6edf2;
+    padding: 16px;
+    width: 20%;
+    /* 5열 맞추기 */
+    vertical-align: top;
+    background: #fff;
+    border-radius: 6px;
+    box-shadow: 0 3px 6px rgba(0, 0, 0, 0.08);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.product-cell:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.12);
+}
+
+.product-cell h3 {
+    margin: 0 0 8px;
+    font-size: 1.1rem;
+    color: #004e92;
+}
+
+.product-cell p {
+    margin: 0 0 8px;
+    font-size: 0.9rem;
+    color: #555;
+}
+
+.product-cell strong {
+    color: #00aaff;
+}
