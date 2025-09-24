@@ -1,5 +1,6 @@
 import React from "react";
 import "./../css/MarketPage.css";
+import logo from "../image/logo192.png";
 
 const MarketPage = () => {
   // 더미 데이터 (12개)
@@ -8,6 +9,7 @@ const MarketPage = () => {
     name: `상품 ${i + 1}`,
     price: `${(i + 1) * 1000}원`,
     desc: `이것은 ${i + 1}번째 상품의 설명입니다.`,
+    img : logo,
   }));
 
   // 행(row) 단위로 데이터 쪼개기 (3개씩)
@@ -39,9 +41,11 @@ const MarketPage = () => {
             <tr key={rowIndex}>
               {row.map((item) => (
                 <td key={item.id} className="product-cell">
-                  <h3>{item.name}</h3>
+                  <img src={item.img} alt={item.name} />
+                  <h3>{item.name}</h3>  
                   <p>{item.desc}</p>
                   <strong>{item.price}</strong>
+              
                 </td>
               ))}
             </tr>
@@ -51,5 +55,9 @@ const MarketPage = () => {
     </div>
   );
 };
+
+
+
+
 
 export default MarketPage;
