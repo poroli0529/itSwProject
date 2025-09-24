@@ -15,7 +15,7 @@ const RegisterPage = () => {
 
   return (
     <form onSubmit={handleSubmit}>
-      <h2>회원가입123</h2>
+      <h2>회원가입1243</h2>
          <input
         type="text"
         placeholder="학번"
