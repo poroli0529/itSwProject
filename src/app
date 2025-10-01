@@ -1,0 +1,502 @@
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { initializeApp } from 'firebase/app';
+import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
+import { getFirestore, collection, query, onSnapshot, serverTimestamp, addDoc, where } from 'firebase/firestore';
+import { Home, Users, Trophy, Clipboard, PlusCircle, Loader, User } from 'lucide-react';
+
+// === Firebase & Environment Setup ===
+// Canvas 환경 변수를 안전하게 사용하기 위한 설정
+const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-inha-app';
+
+const CLUB_LOGOS = {
+  '컴퓨터공학 동아리': <Home size={28} className="text-blue-500" />,
+  '디자인 동아리': <Users size={28} className="text-pink-500" />,
+  '스포츠 동아리': <Trophy size={28} className="text-green-500" />,
+  '기타 동아리': <Clipboard size={28} className="text-yellow-500" />,
+};
+
+// 게시글 타입 정의
+const POST_TYPES = {
+  CLUB: '동아리 공지글',
+  COMPETITION: '학교 대회 공지글',
+  CONTEST: '공모전 공지글',
+  FREE: '자유 게시판',
+};
+
+// 메인 App 컴포넌트
+const App = () => {
+  const [db, setDb] = useState(null);
+  const [auth, setAuth] = useState(null);
+  const [userId, setUserId] = useState(null);
+  const [isAuthReady, setIsAuthReady] = useState(false);
+  const [posts, setPosts] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('CLUB');
+  const [selectedClub, setSelectedClub] = useState(null); // Club 필터링
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [newPost, setNewPost] = useState({
+    title: '',
+    content: '',
+    type: 'CLUB',
+    clubName: '컴퓨터공학 동아리', // Default for CLUB
+    imageUrl: '', // for COMPETITION
+    deadline: '', // for COMPETITION
+  });
+
+  // 1. Firebase 초기화 및 인증
+  useEffect(() => {
+    try {
+      if (Object.keys(firebaseConfig).length > 0) {
+        const app = initializeApp(firebaseConfig);
+        const authInstance = getAuth(app);
+        const dbInstance = getFirestore(app);
+
+        setAuth(authInstance);
+        setDb(dbInstance);
+
+        // 인증 상태 리스너 설정
+        const unsubscribe = onAuthStateChanged(authInstance, async (user) => {
+          if (user) {
+            setUserId(user.uid);
+          } else {
+            // 커스텀 토큰이 있으면 로그인 시도, 없으면 익명 로그인
+            if (initialAuthToken) {
+              await signInWithCustomToken(authInstance, initialAuthToken);
+            } else {
+              await signInAnonymously(authInstance);
+            }
+          }
+          setIsAuthReady(true);
+        });
+
+        return () => unsubscribe();
+      }
+    } catch (error) {
+      console.error("Firebase Initialization Error:", error);
+    }
+  }, []);
+
+  // 2. 실시간 Firestore 데이터 구독
+  useEffect(() => {
+    if (!db || !userId || !isAuthReady) return;
+
+    setIsLoading(true);
+    // 컬렉션 경로: /artifacts/{appId}/public/data/{collection_name}
+    const postsColRef = collection(db, `/artifacts/${appId}/public/data/inha_posts`);
+    
+    // Firestore 쿼리 설정: 활성 탭에 따른 필터링 (인덱스 오류 방지를 위해 orderBy 제거)
+    // 정렬은 데이터를 가져온 후 클라이언트 측에서 처리합니다.
+    let q = query(postsColRef, where('type', '==', activeTab));
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const fetchedPosts = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          // 원본 Timestamp 저장하여 클라이언트 측 정렬에 사용
+          rawCreatedAt: data.createdAt, 
+          createdAt: data.createdAt?.toDate().toLocaleDateString('ko-KR') || '날짜 없음',
+        };
+      });
+
+      // 클라이언트 측에서 'createdAt' (최신순)으로 정렬
+      fetchedPosts.sort((a, b) => {
+        // Timestamp가 null일 수 있으므로 안전하게 처리
+        const timeA = a.rawCreatedAt ? a.rawCreatedAt.toMillis() : 0;
+        const timeB = b.rawCreatedAt ? b.rawCreatedAt.toMillis() : 0;
+        return timeB - timeA; // 내림차순 (최신순)
+      });
+      
+      setPosts(fetchedPosts);
+      setIsLoading(false);
+    }, (error) => {
+      console.error("Firestore Snapshot Error:", error);
+      setIsLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [db, userId, isAuthReady, activeTab]);
+
+  // 선택된 클럽에 따라 필터링된 게시글 계산
+  const filteredClubPosts = useMemo(() => {
+    if (activeTab === 'CLUB' && selectedClub) {
+      return posts.filter(post => post.clubName === selectedClub);
+    }
+    return posts;
+  }, [posts, activeTab, selectedClub]);
+
+  // 새 게시글 작성 핸들러
+  const handlePostSubmit = useCallback(async (e) => {
+    e.preventDefault();
+    if (!db || !newPost.title || !newPost.content) return;
+
+    try {
+      const postsColRef = collection(db, `/artifacts/${appId}/public/data/inha_posts`);
+      const postData = {
+        ...newPost,
+        authorId: userId,
+        authorName: '인하공전 학생', // 실제로는 사용자 프로필 이름 사용
+        createdAt: serverTimestamp(),
+        type: activeTab, // 현재 활성 탭 타입을 사용
+      };
+
+      if (activeTab === 'COMPETITION') {
+        if (!postData.deadline) {
+          console.error("마감일은 필수입니다.");
+          return;
+        }
+      }
+
+      await addDoc(postsColRef, postData);
+      setNewPost({
+        title: '',
+        content: '',
+        type: 'CLUB',
+        clubName: '컴퓨터공학 동아리',
+        imageUrl: '',
+        deadline: '',
+      });
+      setIsModalOpen(false);
+      console.log("게시글 작성 완료!");
+    } catch (error) {
+      console.error("게시글 작성 실패:", error);
+    }
+  }, [db, userId, newPost, activeTab]);
+
+  // 입력 필드 변경 핸들러
+  const handleChange = useCallback((e) => {
+    const { name, value } = e.target;
+    setNewPost(prev => ({ ...prev, [name]: value }));
+  }, []);
+
+  // 로딩 및 에러 처리 UI
+  if (!isAuthReady || isLoading) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-gray-100">
+        <Loader className="w-8 h-8 animate-spin text-blue-600" />
+        <p className="ml-3 text-lg font-medium text-gray-700">커뮤니티 로딩 중...</p>
+      </div>
+    );
+  }
+
+  // --- 게시판 별 렌더링 컴포넌트 ---
+
+  const PostItem = ({ post }) => (
+    <div className="bg-white p-4 rounded-xl shadow-md hover:shadow-lg transition duration-200 border border-gray-100">
+      <h3 className="font-bold text-lg text-gray-800 mb-1 flex items-center">
+        {post.type === 'CLUB' && (
+          <span className={`mr-2 ${post.clubName === selectedClub ? 'text-blue-600' : 'text-gray-400'}`}>
+            {CLUB_LOGOS[post.clubName] || CLUB_LOGOS['기타 동아리']}
+          </span>
+        )}
+        {post.title}
+      </h3>
+      <p className="text-sm text-gray-500 truncate mb-2">{post.content}</p>
+      <div className="flex justify-between items-center text-xs text-gray-400">
+        <span>작성자: {post.authorName || post.authorId.substring(0, 8)}...</span>
+        <span>{post.createdAt}</span>
+      </div>
+      {post.type === 'COMPETITION' && (
+        <p className="mt-2 text-sm font-semibold text-red-500">
+          마감일: {post.deadline}
+        </p>
+      )}
+    </div>
+  );
+
+  const ClubBoard = () => (
+    <>
+      {/* 동아리 로고 시각화 및 필터링 */}
+      <div className="flex space-x-4 p-4 bg-white rounded-xl shadow mb-6 overflow-x-auto justify-start md:justify-center">
+        {Object.entries(CLUB_LOGOS).map(([name, LogoComponent]) => (
+          <div
+            key={name}
+            className={`flex flex-col items-center p-3 rounded-xl cursor-pointer transition duration-150 ${
+              selectedClub === name ? 'bg-blue-100 ring-2 ring-blue-500' : 'hover:bg-gray-50'
+            }`}
+            onClick={() => setSelectedClub(name === selectedClub ? null : name)}
+          >
+            <div className="w-12 h-12 flex items-center justify-center">
+                {LogoComponent}
+            </div>
+            <span className="mt-1 text-xs font-medium text-gray-700 whitespace-nowrap">{name}</span>
+          </div>
+        ))}
+        {/* 전체 보기 버튼 */}
+        <div
+            className={`flex flex-col items-center p-3 rounded-xl cursor-pointer transition duration-150 ${
+                selectedClub === null ? 'bg-blue-100 ring-2 ring-blue-500' : 'hover:bg-gray-50'
+            }`}
+            onClick={() => setSelectedClub(null)}
+        >
+            <div className="w-12 h-12 flex items-center justify-center">
+                <Clipboard size={28} className="text-gray-500" />
+            </div>
+            <span className="mt-1 text-xs font-medium text-gray-700">전체</span>
+        </div>
+      </div>
+      
+      {/* 게시글 목록 */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {filteredClubPosts.length > 0 ? (
+          filteredClubPosts.map(post => <PostItem key={post.id} post={post} />)
+        ) : (
+          <p className="text-gray-500 text-center col-span-full py-8">
+            {selectedClub ? `${selectedClub}의` : '선택된 동아리의'} 공지글이 없습니다.
+          </p>
+        )}
+      </div>
+    </>
+  );
+
+  const CompetitionBoard = () => (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {posts.length > 0 ? (
+        posts.map(post => (
+          <div key={post.id} className="bg-white rounded-xl shadow-lg overflow-hidden border border-indigo-100">
+            {/* 사진 (Image) */}
+            <div className="h-40 w-full bg-indigo-50 flex items-center justify-center overflow-hidden">
+                {post.imageUrl ? (
+                    <img
+                        src={post.imageUrl}
+                        alt={post.title}
+                        className="w-full h-full object-cover"
+                        onError={(e) => { e.target.onerror = null; e.target.src = "https://placehold.co/400x160/4f46e5/ffffff?text=대회+포스터" }}
+                    />
+                ) : (
+                    <span className="text-indigo-400 font-bold">포스터 없음</span>
+                )}
+            </div>
+            <div className="p-5">
+              {/* 제목 (Title) */}
+              <h3 className="font-extrabold text-xl text-indigo-700 mb-2">{post.title}</h3>
+              <p className="text-gray-600 text-sm line-clamp-2 mb-4">{post.content}</p>
+              
+              <div className="space-y-2 text-sm">
+                {/* 작성자 (Author) */}
+                <div className="flex items-center text-gray-500">
+                  <User size={14} className="mr-2" />
+                  <span>작성자: {post.authorName || post.authorId.substring(0, 8)}...</span>
+                </div>
+                {/* 작성일자 (Created At) */}
+                <div className="flex items-center text-gray-500">
+                  <Clipboard size={14} className="mr-2" />
+                  <span>작성일: {post.createdAt}</span>
+                </div>
+                {/* 모집 마감일 (Deadline) */}
+                <div className="flex items-center font-bold text-red-500 pt-2">
+                  <Trophy size={16} className="mr-2" />
+                  <span>마감일: {post.deadline || '미정'}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        ))
+      ) : (
+        <p className="text-gray-500 text-center col-span-full py-8">현재 학교 대회 공지글이 없습니다.</p>
+      )}
+    </div>
+  );
+
+  const SimpleBoard = ({ type }) => (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {posts.length > 0 ? (
+        posts.map(post => <PostItem key={post.id} post={post} />)
+      ) : (
+        <p className="text-gray-500 text-center col-span-full py-8">
+          {POST_TYPES[type]}에 게시글이 없습니다.
+        </p>
+      )}
+    </div>
+  );
+  
+  // --- 메인 렌더링 ---
+
+  const renderContent = () => {
+    switch (activeTab) {
+      case 'CLUB':
+        return <ClubBoard />;
+      case 'COMPETITION':
+        return <CompetitionBoard />;
+      case 'CONTEST':
+        return <SimpleBoard type="CONTEST" />;
+      case 'FREE':
+        return <SimpleBoard type="FREE" />;
+      default:
+        return null;
+    }
+  };
+
+  // 새 게시글 작성 모달
+  const PostModal = () => {
+    const isCompetition = activeTab === 'COMPETITION';
+    const isClub = activeTab === 'CLUB';
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="bg-white rounded-xl p-6 w-full max-w-lg shadow-2xl">
+          <h2 className="text-2xl font-bold mb-4 text-gray-800 border-b pb-2">
+            새 게시글 작성 ({POST_TYPES[activeTab]})
+          </h2>
+          <form onSubmit={handlePostSubmit} className="space-y-4">
+            <div>
+              <label htmlFor="title" className="block text-sm font-medium text-gray-700">제목</label>
+              <input
+                type="text"
+                id="title"
+                name="title"
+                value={newPost.title}
+                onChange={handleChange}
+                className="mt-1 block w-full rounded-lg border border-gray-300 shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500"
+                required
+              />
+            </div>
+
+            {/* CLUB 전용 필드 */}
+            {isClub && (
+              <div>
+                <label htmlFor="clubName" className="block text-sm font-medium text-gray-700">동아리 선택</label>
+                <select
+                  id="clubName"
+                  name="clubName"
+                  value={newPost.clubName}
+                  onChange={handleChange}
+                  className="mt-1 block w-full rounded-lg border border-gray-300 shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  {Object.keys(CLUB_LOGOS).map(name => (
+                    <option key={name} value={name}>{name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* COMPETITION 전용 필드 */}
+            {isCompetition && (
+              <>
+                <div>
+                  <label htmlFor="deadline" className="block text-sm font-medium text-gray-700">모집 마감일</label>
+                  <input
+                    type="date"
+                    id="deadline"
+                    name="deadline"
+                    value={newPost.deadline}
+                    onChange={handleChange}
+                    className="mt-1 block w-full rounded-lg border border-gray-300 shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500"
+                    required
+                  />
+                </div>
+                <div>
+                  <label htmlFor="imageUrl" className="block text-sm font-medium text-gray-700">사진/포스터 URL (선택)</label>
+                  <input
+                    type="url"
+                    id="imageUrl"
+                    name="imageUrl"
+                    value={newPost.imageUrl}
+                    onChange={handleChange}
+                    placeholder="ex: https://placehold.co/400x160"
+                    className="mt-1 block w-full rounded-lg border border-gray-300 shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+              </>
+            )}
+
+            <div>
+              <label htmlFor="content" className="block text-sm font-medium text-gray-700">내용</label>
+              <textarea
+                id="content"
+                name="content"
+                rows="4"
+                value={newPost.content}
+                onChange={handleChange}
+                className="mt-1 block w-full rounded-lg border border-gray-300 shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500"
+                required
+              ></textarea>
+            </div>
+
+            <div className="flex justify-end space-x-3 mt-6">
+              <button
+                type="button"
+                onClick={() => setIsModalOpen(false)}
+                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
+              >
+                취소
+              </button>
+              <button
+                type="submit"
+                className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 transition"
+              >
+                게시글 등록
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    );
+  };
+
+
+  return (
+    <div className="min-h-screen bg-gray-50 p-4 sm:p-8">
+      <script src="https://cdn.tailwindcss.com"></script>
+      {/* Viewport Meta Tag for Responsiveness */}
+      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+      {/* Header */}
+      <header className="max-w-7xl mx-auto mb-8 p-4 bg-white rounded-2xl shadow-lg">
+        <h1 className="text-3xl font-extrabold text-blue-800 flex items-center">
+          <Home className="w-8 h-8 mr-3 text-blue-500" />
+          인하공전 학생 커뮤니티
+        </h1>
+        <p className="text-sm text-gray-500 mt-1">
+          현재 로그인된 사용자 ID: <span className="font-mono text-xs bg-gray-100 p-1 rounded">{userId}</span>
+        </p>
+      </header>
+
+      {/* Navigation Tabs */}
+      <nav className="max-w-7xl mx-auto mb-8">
+        <div className="flex flex-wrap space-x-2 sm:space-x-4 border-b border-gray-200">
+          {Object.entries(POST_TYPES).map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => {
+                setActiveTab(key);
+                setSelectedClub(null); // 탭 변경 시 클럽 필터 초기화
+              }}
+              className={`py-3 px-4 sm:px-6 text-sm sm:text-base font-medium transition duration-200 rounded-t-lg
+                ${activeTab === key
+                  ? 'border-b-4 border-blue-600 text-blue-700 font-bold'
+                  : 'text-gray-500 hover:text-gray-700 hover:border-b-2 hover:border-gray-300'
+                }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </nav>
+
+      {/* Main Content Area */}
+      <main className="max-w-7xl mx-auto">
+        <div className="flex justify-between items-center mb-6">
+            <h2 className="text-2xl font-bold text-gray-800">{POST_TYPES[activeTab]}</h2>
+            <button
+              onClick={() => setIsModalOpen(true)}
+              className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-full shadow-lg hover:bg-blue-700 transition duration-150 transform hover:scale-105"
+            >
+              <PlusCircle className="w-5 h-5 mr-2" />
+              글쓰기
+            </button>
+        </div>
+        
+        {renderContent()}
+      </main>
+      
+      {/* Post Creation Modal */}
+      {isModalOpen && <PostModal />}
+    </div>
+  );
+};
+
+export default App;
