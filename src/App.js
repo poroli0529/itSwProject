@@ -66,6 +66,7 @@ function Header({ user, handleLogout }) {
     </header>
   );
 }
+// ㅁㄴㅇㅁㄴㅇㅁㄴㅇㅁㄴㅇ 이거 왜이런
 
 function App() {
   const [user, setUser] = useState(null);
