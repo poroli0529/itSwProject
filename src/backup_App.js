@@ -24,7 +24,9 @@ import {
     serverTimestamp,
     getDocs, // Dummy data population에 사용
     writeBatch // Dummy data population에 사용
-} from 'firebase/firestore';
+} from 'firebase/firestore'; 
+//씨발 이거 왜 자꾸 안돼.
+
 
 const YOUR_FIREBASE_CONFIG = {
   apiKey: "YOUR_API_KEY", // <--- 당신의 API 키로 변경
