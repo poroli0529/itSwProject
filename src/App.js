@@ -21,7 +21,7 @@ import {
   signOut,
 } from "firebase/auth";
 
-// ✅ 페이지 컴포넌트
+// ✅ 페이지 컴포넌트ssss
 import MapPage from "./pages/MapPage";
 import CommunityPage from "./pages/CommunityPage";
 import MarketPage from "./pages/MarketPage";
