@@ -68,6 +68,7 @@ function Header({ user, handleLogout }) {
 }
 // ㅁㄴㅇㅁㄴ
 
+// asd
 function App() {
   const [user, setUser] = useState(null);
 
@@ -83,7 +84,7 @@ function App() {
     }
   });
 
-  // 컴포넌트가 언마운트될 때 리스너 해제ㅁㄴㅇ
+  // 컴포넌트가 언마운트될 때 리스너 해제
   return () => unsubscribe();
 }, []);
 

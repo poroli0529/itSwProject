@@ -1,3 +1,62 @@
+<<<<<<< HEAD
+/* 헤더 전체 영역 */
+.header {
+  background-color: navy;
+  padding: 10px 20px;
+}
+
+/* nav 전체를 flex로 → ul과 button 나란히 배치 */
+.header nav {
+  display: flex;
+  align-items: center;
+
+}
+
+/* ul은 가로 정렬 */
+.header ul {
+  list-style: none;
+  display: flex;
+  margin: 0;
+  padding: 0;
+}
+
+/* 각 li 요소 */
+.header ul li {
+  margin-right: 20px;
+}
+
+.header ul li a {
+  color: white;
+  text-decoration: none;
+  font-weight: bold;
+  padding: 8px 12px;
+  border-radius: 4px;
+  transition: background 0.2s ease-in-out;
+}
+
+.header ul li a:hover {
+  background-color: #1a3d7c;
+}
+
+/* 회원가입 버튼 */
+.header .rgButton button {
+
+  
+  margin-left: auto; /* ul 오른쪽 끝으로 밀림 */
+  margin-right: 10px;
+  padding: 8px 14px;
+  background-color: #ffcc00;
+  border: none;
+  border-radius: 4px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background 0.2s ease-in-out;
+}
+
+#rgButton:hover {
+  background-color: #e6b800;
+}
+=======
 .App {
   text-align: center;
 }
@@ -36,3 +95,4 @@
     transform: rotate(360deg);
   }
 }
+>>>>>>> test4
