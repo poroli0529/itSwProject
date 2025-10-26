@@ -1,44 +1,34 @@
 import { useState, useEffect } from "react";
-import { auth, db } from "../firebase";
-import {
-  collection,
-  addDoc,
-  onSnapshot,
-  deleteDoc,
-  doc,
-  serverTimestamp,
-  orderBy,
-  query,
-} from "firebase/firestore";
+import { useNavigate } from "react-router-dom";
+import { getProducts, deleteProduct } from "../api/products";
 
 export default function MarketPage({ user }) {
   const [items, setItems] = useState([]);
-  const [form, setForm] = useState({ name: "", price: "", desc: "" });
+  const navigate = useNavigate();
 
-  useEffect(() => {
-    const q = query(collection(db, "products"), orderBy("timestamp", "desc"));
-    const unsub = onSnapshot(q, (snap) =>
-      setItems(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
-    );
-    return () => unsub();
-  }, []);
-
-  const handleAdd = async () => {
-    if (!user) return alert("로그인 후 이용하세요!");
-    const { name, price, desc } = form;
-    if (!name.trim() || !price.trim()) return;
-    await addDoc(collection(db, "products"), {
-      name,
-      price,
-      desc,
-      authorId: user.uid,
-      timestamp: serverTimestamp(),
-    });
-    setForm({ name: "", price: "", desc: "" });
+  const fetchItems = async () => {
+    try {
+      const data = await getProducts();
+      setItems(data || []);
+    } catch (e) {
+      console.error("상품 불러오기 실패:", e);
+    }
   };
 
+  useEffect(() => {
+    fetchItems();
+  }, []);
+
+  // registration moved to separate page (/market/new)
+
   const handleDelete = async (id) => {
-    await deleteDoc(doc(db, "products", id));
+    try {
+      await deleteProduct(id);
+      await fetchItems();
+    } catch (e) {
+      console.error("삭제 실패:", e);
+      alert("삭제에 실패했습니다.");
+    }
   };
 
   return (
@@ -48,27 +38,9 @@ export default function MarketPage({ user }) {
       </h1>
 
       {user && (
-        <div className="bg-white p-4 mb-6 rounded-lg shadow space-y-2">
-          <input
-            value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
-            placeholder="상품명"
-            className="border w-full p-2 rounded"
-          />
-          <input
-            value={form.price}
-            onChange={(e) => setForm({ ...form, price: e.target.value })}
-            placeholder="가격 (원)"
-            className="border w-full p-2 rounded"
-          />
-          <textarea
-            value={form.desc}
-            onChange={(e) => setForm({ ...form, desc: e.target.value })}
-            placeholder="설명"
-            className="border w-full p-2 rounded"
-          />
+        <div className="flex justify-center mb-6">
           <button
-            onClick={handleAdd}
+            onClick={() => navigate("/market/new")}
             className="bg-blue-600 text-white px-4 py-2 rounded"
           >
             등록
@@ -76,27 +48,84 @@ export default function MarketPage({ user }) {
         </div>
       )}
 
-      <div className="grid gap-4">
-        {items.map((item) => (
-          <div
-            key={item.id}
-            className="bg-white p-4 shadow rounded-lg flex justify-between"
-          >
-            <div>
-              <h2 className="text-xl font-semibold">{item.name}</h2>
-              <p className="text-blue-600 font-bold">{item.price} 원</p>
-              <p className="text-gray-500 text-sm">{item.desc}</p>
-            </div>
-            {user && user.uid === item.authorId && (
-              <button
-                onClick={() => handleDelete(item.id)}
-                className="text-red-500 hover:text-red-700"
+      <div className="max-w-6xl mx-auto">
+        {/* 그리드 전체에 2px 회색 테두리, 내부 여백을 줘서 카드와 테두리 사이 간격 확보 */}
+        <div className="border-2 border-gray-300 p-3">
+          <div className="grid grid-cols-4 gap-4">
+            {items.slice(0, 16).map((item) => (
+              <div
+                key={item.itemId || item.id}
+                className="bg-white p-4 flex flex-col h-full"
+                style={{ border: "1px solid #000" }}
               >
-                삭제
-              </button>
-            )}
+                <div className="flex-1">
+                  {item.imageUrl ? (
+                    <div className="mb-2">
+                      <img
+                        src={item.imageUrl}
+                        alt={item.title || "썸네일"}
+                        className="w-full h-40 object-cover rounded mb-2"
+                      />
+                    </div>
+                  ) : null}
+
+                  <h2 className="text-lg font-semibold mb-2">
+                    {item.title || item.name}
+                  </h2>
+                  <p className="text-blue-600 font-bold mb-2">
+                    {item.price ? item.price + " 원" : "가격 협의"}
+                  </p>
+                </div>
+
+                <div className="mt-3 text-sm text-gray-600">
+                  <div>
+                    상태:{" "}
+                    <span className="font-medium">
+                      {item.isSold ? "판매완료" : "판매중"}
+                    </span>
+                  </div>
+                  <div>
+                    작성시간:{" "}
+                    {item.createdAt
+                      ? new Date(item.createdAt).toLocaleString("ko-KR", {
+                          year: "numeric",
+                          month: "2-digit",
+                          day: "2-digit",
+                        })
+                      : "-"}
+                  </div>
+                </div>
+
+                <div className="mt-3 flex justify-end">
+                  <div className="flex items-center space-x-2">
+                    {user &&
+                      (user.role === "ADMIN" ||
+                        String(user.id) === String(item.authorId) ||
+                        String(user.uid) === String(item.authorId) ||
+                        user.username === item.authorName) && (
+                        <>
+                          <button
+                            onClick={() =>
+                              navigate(`/market/edit/${item.itemId || item.id}`)
+                            }
+                            className="text-blue-500 hover:text-blue-700 border border-black px-2 py-1 rounded"
+                          >
+                            수정
+                          </button>
+                          <button
+                            onClick={() => handleDelete(item.itemId || item.id)}
+                            className="text-red-500 hover:text-red-700 border border-black px-2 py-1 rounded"
+                          >
+                            삭제
+                          </button>
+                        </>
+                      )}
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
-        ))}
+        </div>
       </div>
     </div>
   );
