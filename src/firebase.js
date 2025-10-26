@@ -1,20 +1,15 @@
-// src/firebase.js
-import { initializeApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+// firebase.js has been retired in this project.
+// The frontend now talks to the backend (Spring Boot + MySQL) via REST APIs.
+// If any remaining files import `auth`/`db`, they will receive a helpful error.
 
-const firebaseConfig = {
-  apiKey: "AIzaSyBH-6Sa3O0iJ5S5E5kvhH1qcrqKGgJsB-8",
-  authDomain: "ilife-9326f.firebaseapp.com",
-  projectId: "ilife-9326f",
-  storageBucket: "ilife-9326f.appspot.com",
-  messagingSenderId: "1067301976111",
-  appId: "1:1067301976111:web:271e82e56c423d72de6eda",
-  measurementId: "G-W2RVS0X99H"
+const error = () => {
+  throw new Error(
+    "Firebase was removed. Use the REST API clients in ./api (auth/products/posts) instead."
+  );
 };
 
-const app = initializeApp(firebaseConfig);
+export const auth = { error };
+export const db = { error };
 
-// ✅ 이 두 줄 꼭 있어야 함
-export const auth = getAuth(app);
-export const db = getFirestore(app);
+const api = { auth, db };
+export default api;
