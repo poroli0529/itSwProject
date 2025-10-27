@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { getPosts, deletePost } from "../api/posts";
 import { useNavigate } from "react-router-dom";
+import logo from "./../images/logo.png";
 const USE_MOCK =
   (process.env.REACT_APP_USE_MOCK || "false").toLowerCase() === "true";
 
@@ -36,7 +37,10 @@ export default function CommunityPage({ user }) {
     <div className="p-8 max-w-4xl mx-auto">
       {/* 헤더 영역 */}
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-3xl font-bold text-blue-600">💬 커뮤니티 게시판</h1>
+        <h1 className="text-3xl font-bold text-blue-600">
+          <img src={logo} alt="logo" className="inline-block h-16 w-auto" />
+          <span> 커뮤니티 게시판</span>
+        </h1>
         {user ? (
           <button
             onClick={() => navigate("/community/new")}
