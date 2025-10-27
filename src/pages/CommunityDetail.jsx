@@ -186,14 +186,20 @@ export default function CommunityDetail({ user }) {
         <h2 className="text-lg font-semibold mb-2">댓글</h2>
 
         <form onSubmit={onAddComment} className="space-y-2 mb-4">
-          <div>
-            <input
-              value={commentAuthor}
-              onChange={(e) => setCommentAuthor(e.target.value)}
-              className="border p-2 rounded w-full"
-              placeholder="작성자"
-            />
-          </div>
+          {user ? (
+            <div className="mb-4 border border-gray-200 p-4 rounded">
+              <div className="text-sm text-gray-600">
+                작성자:{" "}
+                <span className="font-medium">
+                  {user.nickname || user.username}
+                </span>
+              </div>
+            </div>
+          ) : (
+            <div className="mb-4 text-sm text-gray-600">
+              로그인 후 댓글을 작성할 수 있습니다.
+            </div>
+          )}
           <div>
             <textarea
               value={commentText}

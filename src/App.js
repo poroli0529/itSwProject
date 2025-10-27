@@ -23,6 +23,7 @@ import CommunityDetail from "./pages/CommunityDetail";
 import CommunityWrite from "./pages/CommunityWrite";
 import MarketPage from "./pages/MarketPage";
 import MarketWrite from "./pages/MarketWrite";
+import MarketDetail from "./pages/MarketDetail";
 import LoginPage from "./pages/LoginPage";
 
 // ✅ 로고 이미지
@@ -37,11 +38,14 @@ function Header({ user, handleLogout }) {
         className="text-2xl font-bold text-blue-700 cursor-pointer flex items-center"
       >
       
-        <img src={title} alt="Title" className="h-8 w-auto" />
+  <img src={title} alt="Title" className="h-16 w-auto" />
       </h1>
       <nav className="flex items-center space-x-4">
-        <Link to="/">지도</Link>
-        <Link to="/community">커뮤니티</Link>
+  <Link to="/">지도</Link>
+  {/* 구분선: 세로선 */}
+  <span className="h-6 border-l border-gray-300 mx-3" aria-hidden="true" />
+  <Link to="/community">커뮤니티</Link>
+  <span className="h-6 border-l border-gray-300 mx-3" aria-hidden="true" />
         <Link to="/market">중고거래</Link>
         {user ? (
           <button
@@ -125,6 +129,7 @@ function App() {
           <Route path="/community/view/:id" element={<CommunityDetail user={user} />} />
           <Route path="/market" element={<MarketPage user={user} />} />
           <Route path="/market/new" element={<MarketWrite />} />
+          <Route path="/market/view/:id" element={<MarketDetail user={user} />} />
           <Route path="/market/edit/:id" element={<MarketWrite />} />
           <Route path="/login" element={<LoginPage handleLogin={handleLogin} />} />
           <Route path="/signup" element={<SignupPage />} />
